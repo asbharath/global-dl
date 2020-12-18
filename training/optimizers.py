@@ -36,6 +36,7 @@ arguments = [
     [str, 'name', 'sgd_nesterov', 'optimized to be used', lambda x: x.lower() in optimizer_list],
     [float, 'momentum', 0.9, 'used when optimizer name is specified as sgd_momentum'],
     [float, "lr", 0.0001, 'initial learning rate', lambda x: x > 0],
+    [float, "weight_decay", 0.0001, 'weight of l2 regularization', lambda x: x > 0],
     [float, "clipnorm", 0, 'if different than zero then use gradient norm clipping'],
     [float, "clipvalue", 0, 'if different than zero then use gradient value clipping'],
     ['namespace', 'lr_decay_strategy', [
