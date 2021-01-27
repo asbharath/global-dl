@@ -9,7 +9,7 @@ import requests
 import tensorflow as tf
 from . import metrics
 
-SERVER_URL = 'https://api.upstride.io'
+SERVER_URL = 'https://alchemyback.upstride.io'
 
 arguments = [
     [str, 'user', '', 'Username to connect to UpStride platform. If not provided then the code will not try to connect'],

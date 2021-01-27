@@ -1,12 +1,11 @@
 import os
 import tensorflow as tf
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
-from .optimizers import get_lr_scheduler, learning_schedule_list
+from .optimizers import get_lr_scheduler
 
 
 def create_dir(path: str):
   """this function exists to be called by the argument parser,
-  to automaticaly create new directories
+  to automatically create new directories
   """
   try:
     os.makedirs(path, exist_ok=True)
@@ -20,7 +19,7 @@ def create_dir(path: str):
 
 def create_dir_or_empty(path: str):
   """this function exists to be called by the argument parser,
-  to automaticaly create new directories if path is not empty
+  to automatically create new directories if path is not empty
   """
   if path == "":
     return True
@@ -34,64 +33,36 @@ def create_dir_or_empty(path: str):
 #  - 'list[{type}]' with type in [int, str, bool, float] (for instance 'list(str)')
 #  - 'namespace' to define namespace
 arguments = [
-    ['list[str]', "yaml_config", [], "config file overriden by these argparser parameters"],
+    ['list[str]', "yaml_config", [], "config file overwritten by these argparser parameters"],
     [str, "checkpoint_dir", '', 'Checkpoints directory', create_dir],
     [str, 'title', '', 'title of the experiment'],
     [str, 'description', '', 'description of the experiment'],
     [str, "log_dir", '', 'Log directory', create_dir],
     [int, "num_epochs", 60, 'The number of epochs to run', lambda x: x > 0],
-    ['namespace', 'configuration', [
-        [bool, "mirrored", False, 'If true then use mirrored strategy'],
-        [bool, "with_mixed_precision", False, 'To train with mixed precision'],
-        [bool, 'profiler', False, 'if true then profile tensorflow training using tensorboard. Need tf >=2.2'], # TODO move to debug namespace
-    ]],
     [int, 'early_stopping', 1000000, 'stop  the training if validation loss doesn\'t decrease for n value'],
     ['namespace', 'debug', [
         [bool, 'write_graph', False, ''],
         [bool, 'write_histogram', False, ''],
-        [bool, 'log_gradients', False, 'whether to visualize the histogram, distibution and norm of gradients'],
+        [bool, 'log_gradients', False, 'whether to visualize the histogram, distribution and norm of gradients'],
+        [bool, 'profiler', False, 'if true then profile tensorflow training using tensorboard. Need tf >=2.2'],  
     ]]
 ]
 
 
-def create_env_directories(args, experiment_name):
-  """
-  Args:
-      args ([type]): dict need to have checkpoint_dir, log_dir, export_dir
-      experiment_name ([type]): [description]
+def create_env_directories(experiment_name: str, checkpoint_dir: str, log_dir: str, export_dir=''):
+  """ Create the checkpoint, log and export directories by joining the experiment_name to the provided directories.
 
-  Returns:
-      [type]: [description]
+  Returns: The updated directories. export_dir is None if the user don't want to export the result of the training
   """
-  checkpoint_dir = os.path.join(args['checkpoint_dir'], experiment_name)
-  log_dir = os.path.join(args['log_dir'], experiment_name)
-  export_dir = os.path.join(args['export']['dir'], experiment_name) if args['export']['dir'] else None
+  checkpoint_dir = os.path.join(checkpoint_dir, experiment_name)
+  log_dir = os.path.join(log_dir, experiment_name)
+  export_dir = os.path.join(export_dir, experiment_name) if export_dir else None
   return checkpoint_dir, log_dir, export_dir
 
 
-def setup_mp(args):
-  if args['configuration']['with_mixed_precision']:
-    print('Training with Mixed Precision')
-    policy = mixed_precision.Policy('mixed_float16')
-    mixed_precision.set_policy(policy)
-    print(f'Compute dtype: {policy.compute_dtype}')
-    print(f'Variable dtype: {policy.variable_dtype}')
-    print(f'Loss scale: {policy.loss_scale}')
-    # the LossScaleOptimizer is not needed because model.fit already handle this. See https://www.tensorflow.org/guide/keras/mixed_precision
-    # for more information. I let the code here to remember if one day we go to custom training loop
-    # opt = mixed_precision.LossScaleOptimizer(opt, loss_scale=policy.loss_scale)
-
-
-def define_model_in_strategy(args, get_model):
-  if args['configuration']['mirrored']:
-    mirrored_strategy = tf.distribute.MirroredStrategy()
-    with mirrored_strategy.scope():
-      model, optimizer = get_model(args)
-  else:
-    model, optimizer = get_model(args)
-  return model, optimizer
-
 class GradientCallback(tf.keras.callbacks.Callback):
+  """ Custom callback for gradient visualization in tensorboard
+  """
   def __init__(self, batch, log_dir, log_freq=0):
     """ 
     Args:
@@ -101,8 +72,8 @@ class GradientCallback(tf.keras.callbacks.Callback):
     """
     self.log_freq = log_freq
     self.batch = batch
-    self.grad_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'grads')) 
-        
+    self.grad_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'grads'))
+
   def _log_gradients(self, epoch):
     """Logs the gradients of the Model."""
     x, y = self.batch
@@ -125,22 +96,22 @@ class GradientCallback(tf.keras.callbacks.Callback):
           g_norm = tf.norm(grads, ord='euclidean')
           tf.summary.histogram(grad_name+'_hist', grads, epoch)
           tf.summary.scalar(grad_name+'_norm', g_norm, epoch)
-          
+
   def on_epoch_end(self, epoch, logs=None):
     if self.log_freq and epoch % self.log_freq == 0:
       self._log_gradients(epoch)
 
 
-def get_callbacks(args, log_dir):
+def get_callbacks(config, log_dir):
   # define callbacks
-  histogram_freq = 1 if args['debug']['write_histogram'] else 0
-  write_graph = args['debug']['write_graph']
-  profile_batch = '10, 12' if args['configuration']['profiler'] else 0
+  histogram_freq = 1 if config['debug']['write_histogram'] else 0
+  write_graph = config['debug']['write_graph']
+  profile_batch = '10, 12' if config['debug']['profiler'] else 0
   tensorboard_cb = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=histogram_freq, write_graph=write_graph, write_images=False, profile_batch=profile_batch)
-  callbacks = [tensorboard_cb, tf.keras.callbacks.EarlyStopping('val_loss', patience=args['early_stopping'])]
-  if args['optimizer']['lr_decay_strategy']['activate']:
+  callbacks = [tensorboard_cb, tf.keras.callbacks.EarlyStopping('val_loss', patience=config['early_stopping'])]
+  if config['optimizer']['lr_decay_strategy']['activate']:
     callbacks.append(
-        get_lr_scheduler(args['optimizer']['lr'], args['num_epochs'], args['optimizer']['lr_decay_strategy']['lr_params'])
+        get_lr_scheduler(config['optimizer']['lr'], config['num_epochs'], config['optimizer']['lr_decay_strategy']['lr_params'])
     )
   return callbacks
 

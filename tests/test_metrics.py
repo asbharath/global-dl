@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import tensorflow as tf
-from .metrics import count_flops,  count_trainable_params, InformationDensity, NetScore, count_flops_efficient
+from training.metrics import count_flops,  count_trainable_params, InformationDensity, NetScore, count_flops_efficient
 
 
 class TestMetrics(unittest.TestCase):

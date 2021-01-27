@@ -18,7 +18,7 @@ optimizer_list = [
     "rmsprop",
 ]
 
-learning_schedule_list = [
+LEARNING_SCHEDULE_LIST = [
     "",
     "exponential_decay",
     "step_decay",
@@ -30,7 +30,7 @@ learning_schedule_list = [
     "explicit_schedule"
 ]
 
-_END_LEARNING_RATE = 0.00001
+_END_LEARNING_RATE = 0.0000001
 
 arguments = [
     [str, 'name', 'sgd_nesterov', 'optimized to be used', lambda x: x.lower() in optimizer_list],
@@ -42,7 +42,7 @@ arguments = [
     ['namespace', 'lr_decay_strategy', [
         [bool, 'activate', True, 'if true then use this callback'],
         ['namespace', 'lr_params', [
-            [str, 'strategy', 'lr_reduce_on_plateau', 'learning rate decay schedule', lambda x: x.lower() in learning_schedule_list],
+            [str, 'strategy', 'lr_reduce_on_plateau', 'learning rate decay schedule', lambda x: x.lower() in LEARNING_SCHEDULE_LIST],
             [int, 'power', 5, 'used only in polynomial_decay, determines the nth degree polynomial'],
             [float, 'alpha', 0.01, 'used only in cosine decay, Minimum learning rate value as a fraction of initial_learning_rate. '],
             [int, 'patience', 10, 'used only in lr_reduce_on_plateau, if validation loss doesn\'t improve for this number of epoch, then reduce the learning rate'],
@@ -58,7 +58,7 @@ arguments = [
 ]
 
 
-class ExponentialDecay(object):
+class ExponentialDecay:
   """Applies exponential decay to the learning rate after each epoch. 
   This schedule is called via the keras LearningRateScheduler at the end of the epoch. 
 
@@ -75,7 +75,7 @@ class ExponentialDecay(object):
     return tf.maximum(self.initial_lr * tf.pow(1 - 0.1, epoch), _END_LEARNING_RATE)
 
 
-class StepDecay(object):
+class StepDecay:
   """Applies Step decay to the learning rate after each epoch. 
   This schedule is called via the keras LearningRateScheduler at the end of the epoch. 
 
@@ -96,7 +96,7 @@ class StepDecay(object):
     return tf.maximum(self.initial_lr * tf.pow(self.drop_rate, tf.floor(epoch / self.drop_after_num_epoch)), _END_LEARNING_RATE)
 
 
-class StepDecaySchedule(object):
+class StepDecaySchedule:
   """Applies Step decay schedule to the learning rate after each epoch. 
   This schedule is called via the keras LearningRateScheduler at the end of the epoch. 
 
@@ -169,7 +169,7 @@ class ExplicitSchedule:
     return self.current_lr
 
 
-class PolynomialDecay(object):
+class PolynomialDecay:
   """Applies Polynomial decay to the learning rate after each eppoch. 
   This schedule is called via the keras LearningRateScheduler at the end of the epoch. 
 
@@ -192,7 +192,7 @@ class PolynomialDecay(object):
             ) + _END_LEARNING_RATE
 
 
-class InverseTimeDecay(object):
+class InverseTimeDecay:
   """Applies inverse time decay to the learning rate after each eppoch. 
   This schedule is called via the keras LearningRateScheduler at the end of the epoch. 
 
@@ -218,7 +218,7 @@ class InverseTimeDecay(object):
       return self.initial_lr / (1 + self.decay_rate * epoch / self.decay_step)
 
 
-class CosineDecay(object):
+class CosineDecay:
   """Applies cosine decay to the learning rate after each eppoch. 
   This schedule is called via the keras LearningRateScheduler at the end of the epoch. 
 

@@ -1,5 +1,5 @@
 import unittest
-from . import optimizers
+from training import optimizers
 
 import numpy as np
 

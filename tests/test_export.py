@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import tensorflow as tf
 import numpy as np
-from .export import export
+from training.export import export
 
 
 def get_model():

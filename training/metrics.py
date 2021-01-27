@@ -92,11 +92,11 @@ def _count_flops_depthwiseconv2d(layer):
 def count_flops_efficient(model):
   flops = 0
   map_layer_to_count_fn = {
-      tf.python.keras.layers.convolutional.Conv2D: _count_flops_conv2d,
-      tf.python.keras.layers.ReLU: _count_flops_relu,
-      tf.python.keras.layers.MaxPooling2D: _count_flops_maxpool2d,
-      tf.python.keras.layers.core.Dense: _count_flops_dense,
-      tf.python.keras.layers.convolutional.DepthwiseConv2D: _count_flops_depthwiseconv2d
+      tf.keras.layers.Conv2D: _count_flops_conv2d,
+      tf.keras.layers.ReLU: _count_flops_relu,
+      tf.keras.layers.MaxPooling2D: _count_flops_maxpool2d,
+      tf.keras.layers.Dense: _count_flops_dense,
+      tf.keras.layers.DepthwiseConv2D: _count_flops_depthwiseconv2d
   }
   for layer in model.layers:
     if type(layer) in map_layer_to_count_fn:
