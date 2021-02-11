@@ -1,4 +1,5 @@
 import os
+from typing import Dict
 import tensorflow as tf
 from .optimizers import get_lr_scheduler
 
@@ -46,7 +47,7 @@ arguments = [
         [bool, 'write_graph', False, ''],
         [bool, 'write_histogram', False, ''],
         [bool, 'log_gradients', False, 'whether to visualize the histogram, distribution and norm of gradients'],
-        [bool, 'profiler', False, 'if true then profile tensorflow training using tensorboard. Need tf >=2.2'],  
+        [bool, 'profiler', False, 'if true then profile tensorflow training using tensorboard. Need tf >=2.2'],
     ]]
 ]
 
@@ -65,6 +66,7 @@ def create_env_directories(experiment_name: str, checkpoint_dir: str, log_dir: s
 class GradientCallback(tf.keras.callbacks.Callback):
   """ Custom callback for gradient visualization in tensorboard
   """
+
   def __init__(self, batch, log_dir, log_freq=0):
     """ 
     Args:
@@ -118,7 +120,17 @@ def get_callbacks(config, log_dir):
   return callbacks
 
 
-def init_custom_checkpoint_callbacks(trackable_objects, ckpt_dir, max_ckpt, save_frequency):
+def init_custom_checkpoint_callbacks(trackable_objects: Dict, ckpt_dir: str, max_ckpt: int, save_frequency: int):
+  """ Prepare a checkpoint callbacks. this function also load back the last checkpoint and return the current epoch number
+
+  Args:
+      trackable_objects: dictionary mapping a tag to a tensorflow object to track. Can be models or optimizers
+      ckpt_dir: path where to write the checkpoint
+      max_ckpt: maximum number of checkpoint to keep
+      save_frequency: frequence to save the checkpoint
+
+  Returns: the tensorflow Callback anf the last epoch
+  """
   checkpoint = tf.train.Checkpoint(**trackable_objects)
   manager = tf.train.CheckpointManager(checkpoint, directory=ckpt_dir, max_to_keep=max_ckpt)
   latest = manager.restore_or_initialize()
