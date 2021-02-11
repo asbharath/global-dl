@@ -37,6 +37,7 @@ arguments = [
     ['list[str]', 'yaml_config', [], 'config file overriden by these argparser parameters'],
     [str, 'checkpoint_dir', '', 'checkpoints directory', create_dir],
     [int, 'max_checkpoints', 5, 'maximum number of checkpoints to keep (from the last epoch)'],
+    [int, 'checkpoint_freq', 1, 'frequency of saving the checkpoints; e.g. checkpoint_freq=5 saves checkpoints every 5 epochs'],
     [str, 'title', '', 'title of the experiment'],
     [str, 'description', '', 'description of the experiment'],
     [str, 'log_dir', '', 'Log directory', create_dir],
@@ -148,7 +149,7 @@ def get_callbacks(args, log_dir):
   return callbacks
 
 
-def init_custom_checkpoint_callbacks(trackable_objects, ckpt_dir, max_ckpt):
+def init_custom_checkpoint_callbacks(trackable_objects, ckpt_dir, max_ckpt, save_frequency):
   checkpoint = tf.train.Checkpoint(**trackable_objects)
   manager = tf.train.CheckpointManager(checkpoint, directory=ckpt_dir, max_to_keep=max_ckpt)
   latest = manager.restore_or_initialize()
@@ -156,4 +157,4 @@ def init_custom_checkpoint_callbacks(trackable_objects, ckpt_dir, max_ckpt):
   if latest is not None:
     print(f'restore {manager.latest_checkpoint}')
     latest_epoch = int(manager.latest_checkpoint.split('-')[-1])
-  return tf.keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: manager.save()), latest_epoch
+  return tf.keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: manager.save(checkpoint_number=epoch) if (epoch % save_frequency) == 0 else None), latest_epoch
