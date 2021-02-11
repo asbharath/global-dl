@@ -34,19 +34,20 @@ def create_dir_or_empty(path: str):
 #  - 'list[{type}]' with type in [int, str, bool, float] (for instance 'list(str)')
 #  - 'namespace' to define namespace
 arguments = [
-    ['list[str]', "yaml_config", [], "config file overriden by these argparser parameters"],
-    [str, "checkpoint_dir", '', 'Checkpoints directory', create_dir],
+    ['list[str]', 'yaml_config', [], 'config file overriden by these argparser parameters'],
+    [str, 'checkpoint_dir', '', 'checkpoints directory', create_dir],
+    [int, 'max_checkpoints', 5, 'maximum number of checkpoints to keep (from the last epoch)'],
     [str, 'title', '', 'title of the experiment'],
     [str, 'description', '', 'description of the experiment'],
-    [str, "log_dir", '', 'Log directory', create_dir],
-    [int, "num_classes", 0, 'Number of classes', lambda x: x > 0],  # TODO this number should be computed from dataset
-    [int, "num_epochs", 60, 'The number of epochs to run', lambda x: x > 0],
+    [str, 'log_dir', '', 'Log directory', create_dir],
+    [int, 'num_classes', 0, 'number of classes', lambda x: x > 0],  # TODO this number should be computed from dataset
+    [int, 'num_epochs', 60, 'The number of epochs to run', lambda x: x > 0],
     ['namespace', 'configuration', [
-        [bool, "mirrored", False, 'If true then use mirrored strategy'],
-        [bool, "with_mixed_precision", False, 'To train with mixed precision'],
-        [bool, 'profiler', False, 'if true then profile tensorflow training using tensorboard. Need tf >=2.2'], # TODO move to debug namespace
+        [bool, 'mirrored', False, 'use mirrored strategy'],
+        [bool, 'with_mixed_precision', False, 'train with mixed precision'],
+        [bool, 'profiler', False, 'profile tensorflow training using tensorboard. Need tf >=2.2'], # TODO move to debug namespace
     ]],
-    ['list[int]', "input_size", [224, 224, 3], 'processed shape of each image'],
+    ['list[int]', 'input_size', [224, 224, 3], 'processed shape of each image'],
     [int, 'early_stopping', 20, 'stop  the training if validation loss doesn\'t decrease for n value'],
     ['namespace', 'debug', [
         [bool, 'write_graph', False, ''],
@@ -147,9 +148,9 @@ def get_callbacks(args, log_dir):
   return callbacks
 
 
-def init_custom_checkpoint_callbacks(trackable_objects, ckpt_dir):
+def init_custom_checkpoint_callbacks(trackable_objects, ckpt_dir, max_ckpt):
   checkpoint = tf.train.Checkpoint(**trackable_objects)
-  manager = tf.train.CheckpointManager(checkpoint, directory=ckpt_dir, max_to_keep=5)
+  manager = tf.train.CheckpointManager(checkpoint, directory=ckpt_dir, max_to_keep=max_ckpt)
   latest = manager.restore_or_initialize()
   latest_epoch = 0
   if latest is not None:
