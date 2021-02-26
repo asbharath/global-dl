@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
+from tensorflow.keras import mixed_precision
 
 STRATEGIES = [
     "oneDevice",
@@ -32,10 +32,9 @@ def setup_mp(config):
   if config['mixed_precision']:
     print('Training with Mixed Precision')
     policy = mixed_precision.Policy('mixed_float16')
-    mixed_precision.set_policy(policy)
+    mixed_precision.set_global_policy(policy)
     print(f'Compute dtype: {policy.compute_dtype}')
     print(f'Variable dtype: {policy.variable_dtype}')
-    print(f'Loss scale: {policy.loss_scale}')
     # the LossScaleOptimizer is not needed because model.fit already handle this. See https://www.tensorflow.org/guide/keras/mixed_precision
     # for more information. I let the code here to remember if one day we go to custom training loop
     # opt = mixed_precision.LossScaleOptimizer(opt, loss_scale=policy.loss_scale)
