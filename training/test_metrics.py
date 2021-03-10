@@ -1,8 +1,8 @@
 import unittest
 import numpy as np
 import tensorflow as tf
-from .metrics import count_flops,  count_trainable_params, InformationDensity, NetScore, count_flops_efficient
-
+from training.metrics import count_flops,  count_trainable_params, InformationDensity, NetScore, count_flops_efficient, count_flops_efficient_type2
+from upstride.type2.tf.keras import layers as type2_layers
 
 class TestMetrics(unittest.TestCase):
   @classmethod
@@ -38,76 +38,102 @@ class TestMetrics(unittest.TestCase):
 
     self.assertAlmostEqual(true_net_score, calculated_net_score.numpy(), places=3)
 
+def relu(x):
+  return tf.nn.relu(x)
+
+
+def hard_sigmoid(x):
+  return tf.nn.relu6(x + 3.) / 6.
+
+
+def hard_swish(x):
+  return x * hard_sigmoid(x)
 
 class TestCountFlops(unittest.TestCase):
-  def test_conv2d_no_bias(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.Conv2D(64, (3, 3), use_bias=False)(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertTrue((f-ef)/f < 1e-4)
+  # def test_conv2d_no_bias(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.Conv2D(64, (3, 3), use_bias=False)(i)
+  #   model = tf.keras.Model(i, x)
+  #   # f = count_flops(model)
+  #   model.summary()
+  #   ef = count_flops_efficient(model)
+  #   print(ef)
+  #   print("\n\n")
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   ia = type2_layers.TF2Upstride()(i)
+  #   x = type2_layers.Conv2D(64, (3, 3), use_bias=False)(ia)
+  #   model = tf.keras.Model(i, x)
+  #   model.summary()
+  #   ef = count_flops_efficient_type2(model)
+  #   print(ef)
+    # self.assertTrue((f-ef)/f < 1e-4)
 
-  def test_conv2d_bias(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.Conv2D(64, (3, 3))(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertTrue((f-ef)/f < 1e-4)
+  # def test_conv2d_bias(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.Conv2D(64, (3, 3))(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   self.assertTrue((f-ef)/f < 1e-4)
 
-  def test_conv2d_strides(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2))(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertTrue((f-ef)/f < 1e-4)
+  # def test_conv2d_strides(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2))(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   self.assertTrue((f-ef)/f < 1e-4)
 
-  def test_conv2d_padding_same(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.Conv2D(64, (3, 3), padding='same')(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertTrue((f-ef)/f < 1e-4)
-    print(f)
-    print(ef)
-    print((f-ef)/f)
+  # def test_conv2d_padding_same(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.Conv2D(64, (3, 3), padding='same')(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   self.assertTrue((f-ef)/f < 1e-4)
+  #   print(f)
+  #   print(ef)
+  #   print((f-ef)/f)
 
-  def test_conv2d_relu(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu')(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertTrue((f-ef)/f < 1e-4)
+  # def test_conv2d_relu(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu')(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   self.assertTrue((f-ef)/f < 1e-4)
 
-  def test_relu(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.ReLU()(i)
-    model = tf.keras.Model(i, x)
-    # f = count_flops(model) # return 0...
-    ef = count_flops_efficient(model)
-    self.assertEqual(ef, 301056)
+  # def relu(self):
+  #   pass
+   
+  # def test_relu(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.Activation(relu, name=relu.__name__)(i)
+  #   print(x)
+  #   model = tf.keras.Model(i, x)
+  #   model.summary()
+  #   # f = count_flops(model) # return 0...
+  #   ef = count_flops_efficient(model)
+  #   print(ef)
+    # self.assertEqual(ef, 301056)
 
-  def test_max_pooling(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.MaxPooling2D((3, 3), strides=(2, 2))(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertEqual(f, ef)
+  # def test_max_pooling(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.MaxPooling2D((3, 3), strides=(2, 2))(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   self.assertEqual(f, ef)
 
-  def test_dense_no_biases(self):
-    i = tf.keras.layers.Input((1000), batch_size=1)
-    x = tf.keras.layers.Dense(100, use_bias=False)(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    # f = 400001 ??? I have no explanation for this
-    # ef = 200000
-    self.assertEqual(ef, 200000)
+  # def test_dense_no_biases(self):
+  #   i = tf.keras.layers.Input((1000), batch_size=1)
+  #   x = tf.keras.layers.Dense(100, use_bias=False)(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   # f = 400001 ??? I have no explanation for this
+  #   # ef = 200000
+  #   self.assertEqual(ef, 200000)
 
   def test_dense_biases(self):
     i = tf.keras.layers.Input((1000), batch_size=1)
@@ -117,18 +143,28 @@ class TestCountFlops(unittest.TestCase):
     ef = count_flops_efficient(model)
     self.assertEqual(ef, 200100)
 
-  def test_depthwiseconv2d(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.DepthwiseConv2D(64, (3, 3), use_bias=False)(i)
+  def test_dense_biases_type2(self):
+    i = tf.keras.layers.Input((1000), batch_size=1)
+    ia = type2_layers.TF2Upstride()(i)
+    x = type2_layers.Dense(int(100/4))(ia)
     model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertTrue((f-ef)/f < 1e-3)
+    # f = count_flops(model)
+    ef = count_flops_efficient_type2(model)
+    print(f"{ef:,}")
+    # self.assertEqual(ef, 200100)
 
-  def test_depthwiseconv2d_bias(self):
-    i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
-    x = tf.keras.layers.DepthwiseConv2D(64, (3, 3), use_bias=True)(i)
-    model = tf.keras.Model(i, x)
-    f = count_flops(model)
-    ef = count_flops_efficient(model)
-    self.assertTrue((f-ef)/f < 1e-3)
+  # def test_depthwiseconv2d(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.DepthwiseConv2D(64, (3, 3), use_bias=False)(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   self.assertTrue((f-ef)/f < 1e-3)
+
+  # def test_depthwiseconv2d_bias(self):
+  #   i = tf.keras.layers.Input((224, 224, 3), batch_size=1)
+  #   x = tf.keras.layers.DepthwiseConv2D(64, (3, 3), use_bias=True)(i)
+  #   model = tf.keras.Model(i, x)
+  #   f = count_flops(model)
+  #   ef = count_flops_efficient(model)
+  #   self.assertTrue((f-ef)/f < 1e-3)

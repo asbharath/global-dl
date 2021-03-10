@@ -1,8 +1,8 @@
 import numpy as np
 import tensorflow as tf
-from functools import reduce
+from functools import reduce, partial
 from tensorflow.python.util import object_identity
-
+from upstride.type2.tf.keras import layers as up_layers
 
 def log10(x):
   base = 10.
@@ -47,6 +47,26 @@ def _count_flops_conv2d(layer):
 
   return int(flops)
 
+def _count_flops_conv2d_type2(layer):
+  if layer.data_format == "channels_first":
+    input_channels = layer.input_shape[1]
+    output_channels, h, w, = layer.output_shape[1:]
+    print(layer.output_shape)
+  elif layer.data_format == "channels_last":
+    input_channels = layer.input_shape[3]
+    h, w, output_channels = layer.output_shape[1:]
+  w_h, w_w = layer.kernel_size
+
+  n_mult = h * w * output_channels * input_channels * w_h * w_w
+  n_add = w_h * w_w * input_channels * h * w * output_channels
+
+  flops = n_mult + n_add
+
+  if layer.use_bias:
+    flops += output_channels * h * w
+
+  # breakpoint()
+  return int(flops)
 
 def _count_flops_relu(layer):
   """ Dev note : current tensorflow profiler say ReLU doesn't cost anything...
@@ -54,10 +74,56 @@ def _count_flops_relu(layer):
   # 2 operations per component : compare and assign
   return reduce(lambda x, y: x*y, layer.output_shape[1:]) * 2
 
+def _count_flops_relu_type2(layer):
+  return _count_flops_relu(layer) * 4
+
+def _count_flops_hard_sigmoid(layer):
+  return _count_flops_relu(layer) * 2 # relu + 1 addition 1 division for each element
+
+def _count_flops_hard_sigmoid_type2(layer):
+  return _count_flops_hard_sigmoid(layer) * 4
+
+def _count_flops_hard_swish(layer):
+  return _count_flops_hard_sigmoid(layer) * 2 # hard_sigmoid + 1 multiplication
+
+def _count_flops_hard_swish_type2(layer):
+  return _count_flops_hard_swish(layer) * 4
 
 def _count_flops_maxpool2d(layer):
   return layer.pool_size[0] * layer.pool_size[1] * reduce(lambda x, y: x*y, layer.output_shape[1:])
 
+def _count_flops_maxpool2d_type2(layer):
+  return _count _count_flops_maxpool2d * 4
+
+def _count_flops_globalmaxpool2d(layer):
+  return reduce(lambda x, y: x*y, layer.input_shape[1:])
+
+def _count_flops_globalmaxpool2d_type2(layer):
+  return _count_flops_globalmaxpool2d(layer) * 4
+
+def _count_flops_globalavgpool2d(layer):
+  return reduce(lambda x, y: x*y, layer.input_shape[1:])
+
+def _count_flops_globalavgpool2d_type2(layer):
+  return _count_flops_globalavgpool2d(layer) * 4
+
+def _count_flops_add(layer):
+  return reduce(lambda x, y: x*y, layer.output_shape[1:])
+
+def _count_flops_add_type2(layer):
+  return reduce(lambda x, y: x*y, layer.output_shape[1:]) * 4
+
+def _count_flops_multiply(layer):
+  return reduce(lambda x, y: x*y, layer.output_shape[1:])
+
+def _count_flops_multiply_type2(layer):
+  return reduce(lambda x, y: x*y, layer.output_shape[1:]) * 4
+
+def _count_flops_bn(layer):
+  return reduce(lambda x, y: x*y, layer.output_shape[1:]) * 2
+
+def _count_flops_bn_type2(layer):
+  return _count_flops_bn(layer) * 4
 
 def _count_flops_dense(layer):
   n_mult = layer.input_shape[1] * layer.output_shape[1]
@@ -65,8 +131,21 @@ def _count_flops_dense(layer):
   flops = n_mult + n_add
   if layer.use_bias:
     flops += layer.output_shape[1]
+  # breakpoint()
   return flops
 
+def _count_flops_dense_type2(layer):
+  input_shape = layer.input_shape[1]
+  output_shape = layer.output_shape[1]
+  q_op = 8 * input_shape * output_shape
+  q_kernel_shape = 8 * input_shape * output_shape # for better verbosity 
+  q_input = 8 * input_shape
+  q_output = 12 * output_shape
+
+  flops = q_op + q_kernel_shape + q_input + q_output
+  if layer.use_bias:
+    flops += layer.output_shape[1] * 4
+  return flops
 
 def _count_flops_depthwiseconv2d(layer):
   if layer.data_format == "channels_first":
@@ -88,22 +167,63 @@ def _count_flops_depthwiseconv2d(layer):
 
   return int(flops)
 
+def format_flops(flops):
+  if flops / 10**9 > 0:
+    return str(round(flops / 10.**9, 2)) + ' GFLOPs'
+  elif flops / 10**6 > 0:
+    return str(round(flops / 10.**6, 2)) + ' MFLOPs'
+  elif flops / 10**3 > 0:
+    return str(round(flops / 10.**3, 2)) + ' KFLOPs'
+  else:
+    return str(round(flops), 2) + ' FLOPs'
 
 def count_flops_efficient(model):
   flops = 0
+
+  # Not all the activations are present in keras layers. 
+  # TODO add new layers to the engine for both tensorflow and upstride.
+  map_activation = {
+    "relu": _count_flops_relu,
+    "hard_sigmoid": _count_flops_hard_sigmoid,
+    "hard_swish": _count_flops_hard_swish,
+  }
+
   map_layer_to_count_fn = {
-      tf.python.keras.layers.convolutional.Conv2D: _count_flops_conv2d,
-      tf.python.keras.layers.ReLU: _count_flops_relu,
-      tf.python.keras.layers.MaxPooling2D: _count_flops_maxpool2d,
-      tf.python.keras.layers.core.Dense: _count_flops_dense,
-      tf.python.keras.layers.convolutional.DepthwiseConv2D: _count_flops_depthwiseconv2d
+      tf.keras.layers.Conv2D: _count_flops_conv2d,
+      tf.keras.layers.ReLU: _count_flops_relu,
+      tf.keras.layers.MaxPooling2D: _count_flops_maxpool2d,
+      tf.keras.layers.GlobalMaxPooling2D: _count_flops_maxpool2d,
+      tf.keras.layers.GlobalAveragePooling2D: _count_flops_globalavgpool2d,
+      tf.keras.layers.Add: _count_flops_add,
+      tf.keras.layers.Multiply: _count_flops_multiply,
+      tf.keras.layers.BatchNormalization: _count_flops_bn,
+      tf.keras.layers.Dense: _count_flops_dense,
+      tf.keras.layers.DepthwiseConv2D: _count_flops_depthwiseconv2d
+  }
+
+  for layer in model.layers:
+    if type(layer) in map_layer_to_count_fn:
+      flops += map_layer_to_count_fn[type(layer)](layer)
+    if type(layer) == tf.keras.layers.Activation:
+      flops += map_activation[layer.activation.__name__](layer)
+        
+  return format_flops(flops)
+
+def count_flops_efficient_type2(model):
+  flops = 0
+  map_layer_to_count_fn = {
+      up_layers.Conv2D: _count_flops_conv2d_type2,
+      up_layers.Dense: _count_flops_dense_type2,
+      # tf.keras.layers.ReLU: _count_flops_relu,
+      # tf.keras.layers.MaxPooling2D: _count_flops_maxpool2d,
+      # tf.keras.layers.Dense: _count_flops_dense,
+      # tf.keras.layers.DepthwiseConv2D: _count_flops_depthwiseconv2d
   }
   for layer in model.layers:
     if type(layer) in map_layer_to_count_fn:
       flops += map_layer_to_count_fn[type(layer)](layer)
 
   return flops
-
 
 def count_flops(model):
   """
