@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from functools import reduce, partial
 from tensorflow.python.util import object_identity
-from upstride.type2.tf.keras import layers as up_layers
+from upstride.type2.tf.keras import layers as type2_layers
 
 def log10(x):
   base = 10.
@@ -51,7 +51,6 @@ def _count_flops_conv2d_type2(layer):
   if layer.data_format == "channels_first":
     input_channels = layer.input_shape[1]
     output_channels, h, w, = layer.output_shape[1:]
-    print(layer.output_shape)
   elif layer.data_format == "channels_last":
     input_channels = layer.input_shape[3]
     h, w, output_channels = layer.output_shape[1:]
@@ -60,12 +59,16 @@ def _count_flops_conv2d_type2(layer):
   n_mult = h * w * output_channels * input_channels * w_h * w_w
   n_add = w_h * w_w * input_channels * h * w * output_channels
 
-  flops = n_mult + n_add
+  op = 8 * (n_mult + n_add)
+  input_shape = 8 * np.prod(layer.input_shape[1:])
+  kernel_shape = 8 * np.prod(layer.kernel_size)
+  output_shape = 12 * np.prod(layer.output_shape[1:])
+
+  flops = op + input_shape + kernel_shape + output_shape
 
   if layer.use_bias:
-    flops += output_channels * h * w
+    flops += output_channels * h * w * 4
 
-  # breakpoint()
   return int(flops)
 
 def _count_flops_relu(layer):
@@ -74,6 +77,7 @@ def _count_flops_relu(layer):
   # 2 operations per component : compare and assign
   return reduce(lambda x, y: x*y, layer.output_shape[1:]) * 2
 
+# TODO refactor the below functions for any algebra
 def _count_flops_relu_type2(layer):
   return _count_flops_relu(layer) * 4
 
@@ -93,7 +97,7 @@ def _count_flops_maxpool2d(layer):
   return layer.pool_size[0] * layer.pool_size[1] * reduce(lambda x, y: x*y, layer.output_shape[1:])
 
 def _count_flops_maxpool2d_type2(layer):
-  return _count _count_flops_maxpool2d * 4
+  return _count_flops_maxpool2d(layer) * 4
 
 def _count_flops_globalmaxpool2d(layer):
   return reduce(lambda x, y: x*y, layer.input_shape[1:])
@@ -131,7 +135,6 @@ def _count_flops_dense(layer):
   flops = n_mult + n_add
   if layer.use_bias:
     flops += layer.output_shape[1]
-  # breakpoint()
   return flops
 
 def _count_flops_dense_type2(layer):
@@ -167,12 +170,37 @@ def _count_flops_depthwiseconv2d(layer):
 
   return int(flops)
 
+def _count_flops_depthwiseconv2d_type2(layer):
+  if layer.data_format == "channels_first":
+    input_channels = layer.input_shape[1]
+    output_channels, h, w, = layer.output_shape[1:]
+  elif layer.data_format == "channels_last":
+    input_channels = layer.input_shape[3]
+    h, w, output_channels = layer.output_shape[1:]
+  w_h, w_w = layer.kernel_size
+
+  n_neurons_output = h * w * output_channels
+  n_mult = w_h * w_w * n_neurons_output
+  n_add = (w_h * w_w - 1) * n_neurons_output
+
+  op = 8 * (n_mult + n_add)
+  input_shape = 8 * np.prod(layer.input_shape[1:])
+  kernel_shape = 8 * np.prod(layer.kernel_size)
+  output_shape = 12 * np.prod(layer.output_shape[1:])
+
+  flops = op + input_shape + kernel_shape + output_shape
+
+  if layer.use_bias:
+    flops += n_neurons_output * 4
+
+  return int(flops)
+
 def format_flops(flops):
-  if flops / 10**9 > 0:
+  if flops // 10**9 > 0:
     return str(round(flops / 10.**9, 2)) + ' GFLOPs'
-  elif flops / 10**6 > 0:
+  elif flops // 10**6 > 0:
     return str(round(flops / 10.**6, 2)) + ' MFLOPs'
-  elif flops / 10**3 > 0:
+  elif flops // 10**3 > 0:
     return str(round(flops / 10.**3, 2)) + ' KFLOPs'
   else:
     return str(round(flops), 2) + ' FLOPs'
@@ -211,19 +239,36 @@ def count_flops_efficient(model):
 
 def count_flops_efficient_type2(model):
   flops = 0
-  map_layer_to_count_fn = {
-      up_layers.Conv2D: _count_flops_conv2d_type2,
-      up_layers.Dense: _count_flops_dense_type2,
-      # tf.keras.layers.ReLU: _count_flops_relu,
-      # tf.keras.layers.MaxPooling2D: _count_flops_maxpool2d,
-      # tf.keras.layers.Dense: _count_flops_dense,
-      # tf.keras.layers.DepthwiseConv2D: _count_flops_depthwiseconv2d
+
+  # Not all the activations are present in keras layers. 
+  # TODO add new layers to the engine for both tensorflow and upstride.
+  map_activation = {
+    "relu": _count_flops_relu_type2,
+    "hard_sigmoid": _count_flops_hard_sigmoid_type2,
+    "hard_swish": _count_flops_hard_swish_type2,
   }
+
+  map_layer_to_count_fn = {
+      type2_layers.Conv2D: _count_flops_conv2d_type2,
+      tf.keras.layers.ReLU: _count_flops_relu_type2,
+      tf.keras.layers.MaxPooling2D: _count_flops_maxpool2d_type2,
+      tf.keras.layers.GlobalMaxPooling2D: _count_flops_maxpool2d_type2,
+      tf.keras.layers.GlobalAveragePooling2D: _count_flops_globalavgpool2d_type2,
+      tf.keras.layers.Add: _count_flops_add_type2,
+      tf.keras.layers.Multiply: _count_flops_multiply_type2,
+      tf.keras.layers.BatchNormalization: _count_flops_bn_type2,
+      type2_layers.Dense: _count_flops_dense_type2,
+      type2_layers.DepthwiseConv2D: _count_flops_depthwiseconv2d_type2
+  }
+
   for layer in model.layers:
     if type(layer) in map_layer_to_count_fn:
+      print(layer)
       flops += map_layer_to_count_fn[type(layer)](layer)
+    if type(layer) == tf.keras.layers.Activation:
+      flops += map_activation[layer.activation.__name__](layer)
 
-  return flops
+  return format_flops(flops)
 
 def count_flops(model):
   """
